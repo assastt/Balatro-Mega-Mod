@@ -1,0 +1,200 @@
+[manifest]
+version = "1.0.0"
+dump_lua = true
+priority = 12
+
+# Burnt card extra card draw
+[[patches]]
+[patches.pattern]
+target = '''functions/state_events.lua'''
+pattern = "for i=1, hand_space do*"
+position = "before"
+payload = '''
+hand_space = hand_space + G.GAME.prism_extra_draw
+G.GAME.prism_extra_draw = 0
+'''
+match_indent = true
+[[patches]]
+[patches.pattern]
+target = "functions/state_events.lua"
+pattern = '''
+-- TARGET: main end_of_round evaluation
+'''
+position = "after"
+payload = '''
+G.GAME.prism_extra_draw = 0
+'''
+match_indent = true
+
+#bonus packs
+[[patches]]
+[patches.pattern]
+target = 'card.lua'
+pattern = '''G.GAME.pack_choices = self.ability.choose*'''
+position = 'after'
+payload = '''
+if G.GAME.used_vouchers.v_prism_bonus_packs then G.GAME.pack_choices = G.GAME.pack_choices + 1 end
+'''
+match_indent = true
+
+#legacy green seal
+[[patches]]
+[patches.pattern]
+target = "functions/state_events.lua"
+pattern = "G.deck:shuffle('nr'..G.GAME.round_resets.ante)"
+position = "after"
+payload = '''
+local cards = {}
+for i=1, #G.deck.cards - 1 do
+    while i <= #G.deck.cards and G.deck.cards[i].seal == "prism_green_old" do
+        table.insert(cards, G.deck.cards[i])
+        table.remove(G.deck.cards,i)
+    end
+end
+for _, card in pairs(cards) do
+    local pos = (pseudorandom('green') < 0.5 and #G.deck.cards) or pseudorandom('green_pos', 1, #G.deck.cards + 1)
+    table.insert(G.deck.cards,pos,card)
+end
+'''
+match_indent = true
+
+#ban djinn from jokerless challenge
+[[patches]]
+[patches.pattern]
+target = "challenges.lua"
+pattern = "{id = 'c_soul'},"
+position = "after"
+payload = '''
+{id = 'c_prism_spectral_djinn'},
+'''
+match_indent = true
+
+#ban enhancers from fragile challenge
+[[patches]]
+[patches.pattern]
+target = "challenges.lua"
+pattern = "{id = 'c_lovers'},"
+position = "after"
+payload = '''
+{id = 'c_prism_myth_dwarf'},
+{id = 'c_prism_myth_dragon'},
+{id = 'c_prism_myth_twin'},
+{id = 'c_prism_myth_siren'},
+'''
+match_indent = true
+
+[[patches]]
+[patches.pattern]
+target = "challenges.lua"
+pattern = "{id = 'j_marble'},"
+position = "after"
+payload = '''
+{id = 'j_prism_medusa'},
+'''
+match_indent = true
+
+#Allows to play more than 5 cards
+[[patches]]
+[patches.pattern]
+target = 'functions/button_callbacks.lua'
+pattern = """if #G.hand.highlighted <= 0 or G.GAME.blind.block_play or #G.hand.highlighted > 5 then"""
+position = 'at'
+payload = """
+if #G.hand.highlighted <= 0 or G.GAME.blind.block_play or #G.hand.highlighted > G.hand.config.highlighted_limit then
+"""
+match_indent = true
+
+#Purple deck
+[[patches]]
+[patches.pattern]
+target = 'functions/state_events.lua'
+pattern = """ease_discard(-1)"""
+position = 'at'
+payload = """
+if G.GAME.modifiers.purple_deck and G.GAME.current_round.discards_left <= 0 then
+    ease_hands_played(-1)
+else 
+    ease_discard(-1)
+end
+"""
+match_indent = true
+[[patches]]
+[patches.pattern]
+target = 'functions/state_events.lua'
+pattern = """ease_hands_played(-1)"""
+position = 'at'
+payload = """
+if G.GAME.modifiers.purple_deck and G.GAME.current_round.hands_left <= 0 then
+    ease_discard(-1)
+else 
+    ease_hands_played(-1)
+end
+"""
+match_indent = true
+[[patches]]
+[patches.pattern]
+target = 'game.lua'
+pattern = """if G.GAME.chips - G.GAME.blind.chips >= 0 or G.GAME.current_round.hands_left < 1 then"""
+position = 'at'
+payload = """
+if G.GAME.chips - G.GAME.blind.chips >= 0 or 
+	(G.GAME.modifiers.purple_deck and G.GAME.current_round.hands_left < 1 and G.GAME.current_round.discards_left < 1) or
+	(not G.GAME.modifiers.purple_deck and G.GAME.current_round.hands_left < 1) then
+"""
+match_indent = true
+
+#platinum stake
+[[patches]]
+[patches.pattern]
+target = 'card.lua'
+pattern = """self.extra_cost = 0 + G.GAME.inflation"""
+position = 'after'
+payload = """ 
+if G.GAME.modifiers.price_scaling then self.extra_cost = self.extra_cost + G.GAME.price_scaling end
+"""
+match_indent = true
+
+#hit record
+[[patches]]
+[patches.pattern]
+target = "functions/state_events.lua"
+pattern = "draw_card(G.play,G.discard, it*100/play_count,'down', false, v)"
+position = "before"
+payload = '''
+if v.config.cycling then
+    v.config.cycling = false
+	draw_card(G.play,G.deck, it*100/play_count,'down', false, v)
+	G.deck:shuffle('hitr'..G.GAME.round_resets.ante)
+else
+'''
+match_indent = true
+
+[[patches]]
+[patches.pattern]
+target = "functions/state_events.lua"
+pattern = "draw_card(G.play,G.discard, it*100/play_count,'down', false, v)"
+position = "after"
+payload = '''
+end
+'''
+match_indent = true
+
+#emult
+[[patches]]
+[patches.pattern]
+target = "functions/common_events.lua"
+pattern = "local extrafunc = nil"
+position = "after"
+payload = '''
+if not G.PRISM.compat.talisman and not G.PRISM.compat.buffoonery then
+	if eval_type == 'e_mult' then 
+		sound = 'prism_emult'
+		amt = amt
+		text = '^' .. amt .. ' Mult'
+		colour = G.C.MULT
+		config.type = 'fade'
+		config.scale = 0.7
+	end
+end
+'''
+match_indent = true
